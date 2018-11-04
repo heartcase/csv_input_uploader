@@ -9,6 +9,7 @@ from threading import Thread
 import requests
 import hashlib
 import json
+import pandas as pd
 
 ftp_config_path = 'ftp_config.ini'
 
@@ -24,8 +25,12 @@ ftp.login(user=ftp_user, passwd=ftp_password)
 login_server = config['login_server']
 login_host = login_server['host']
 login_port = login_server['port']
+task_server = config['task_server']
+task_host = task_server['host']
+task_port = task_server['port']
 
 BLOCK_SIZE = 8192
+USE_MOCK = True
 
 counter = 0
 is_login = False
@@ -37,21 +42,31 @@ def login():
     global is_login, token, msg
     with create_login_window(msg) as login_window:
         event, values = login_window.Read()
-        password = hashlib.md5((values['password'] + 'salt').encode()).hexdigest()
+        if event is None:
+            exit(0)
         try:
+            password = hashlib.md5((values['password'] + 'salt').encode()).hexdigest()
             url = 'http://' + login_host + ':' + login_port + '/login'
             response = requests.post(url, auth=(values['user'], password))
-        except:
-            msg = 'Error: Remote Server No Response, Access Failure.'
-            login_window.Close()
+        except TypeError:
+            msg = 'Bad Bad Inputs'
             return
-        content = json.loads(response.content.decode())
-        if content['code'] == 20000:
-            is_login = True
-            token = content['data']['token']
-            msg = 'Greeting: Welcome, cowboy!'
+        except requests.exceptions.ConnectionError as e:
+            if USE_MOCK:
+                is_login = True
+                login_window.Close()
+                return
+            else:
+                msg = 'Error: Remote Server No Response, Access Failure.'
+                login_window.Close()
+                return
         else:
-            msg = 'Error: Identity Mismatched, Login Denied'
+            content = json.loads(response.content.decode())
+            if content['code'] == 20000:
+                is_login = True
+                token = content['data']['token']
+            else:
+                msg = 'Error: Identity Mismatched, Login Denied'
         login_window.Close()
 
 
@@ -82,30 +97,74 @@ def sub_loop(file_list):
                     p = int(counter / total_size * 10000)
                     progress_bar.UpdateBar(p)
                     if not t.isAlive():
-                        progress_window.Close()
                         break
+            progress_window.Close()
+    msg = str(len(file_list)) + ' file(s) have been uploaded.'
 
+
+def check_data_format(file_list, task_type):
+    global msg, is_login
+    url = 'http://' + task_host + ':' + task_port + '/task' + '?task_type=' + task_type
+    headers = {"Authorization": "Bearer " + token}
+    try:
+        response = requests.get(url, headers=headers)
+    except requests.exceptions.ConnectionError:
+        if USE_MOCK:
+            if task_type == 'Task_1':
+                data_format = ['col1', 'col2', 'col3', 'col4']
+            else:
+                data_format = ['col1', 'col2', 'col3', 'col20']
+        else:
+            msg = 'Error: Remote Server No Response, Access Failure.'
+            is_login = False
+            return False
+    else:
+        content = json.loads(response.content.decode())
+        if content['code'] == 20000:
+            data_format = content['data']['data_format']
+        else:
+            msg = 'Error: Passport expired.'
+            is_login = False
+            return False
+
+    return all([
+            all([
+                col in pd.read_csv(file, nrows=1).columns
+                for col in data_format
+            ])
+            for file in file_list
+        ])
 
 
 def main_loop():
+    global msg
     while not is_login:
         login()
     file_list = []
-    with create_main_windows() as main_window:
+    with create_main_windows(msg) as main_window:
         while 1:
             main_window.Read(timeout=0)
             try:
                 main_window.FindElement('list').Update(values=file_list)
-            except:
+            except Exception as e:
+                print(e)
                 return False
             event, values = main_window.Read()
+            if event is None:
+                exit(0)
             file_list = values['files'].split(';') if values['files'] else []
+            if event == 'files':
+                continue
             if event == 'Submit' and len(file_list):
+                if values['check']:
+                    if not check_data_format(file_list, values['task']):
+                        msg = 'Some Input Files Have Bad Format, Check Column Names Again!'
+                        continue
                 break
         main_window.Close()
     sub_loop(file_list)
     return True
 
 
-while main_loop():
-    pass
+while 1:
+    main_loop()

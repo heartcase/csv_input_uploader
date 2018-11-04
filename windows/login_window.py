@@ -15,5 +15,6 @@ def create_login_window(msg):
         [password_text, password_input],
         [login_button]
               ]
+
     return sg.Window('User Login').Layout(layout)
 
