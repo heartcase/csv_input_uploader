@@ -29,6 +29,8 @@ task_server = config['task_server']
 task_host = task_server['host']
 task_port = task_server['port']
 
+username = ''
+
 BLOCK_SIZE = 8192
 USE_MOCK = True
 
@@ -39,7 +41,7 @@ msg = 'Greeting: Welcome, cowboy!'
 
 
 def login():
-    global is_login, token, msg
+    global is_login, token, msg, username
     with create_login_window(msg) as login_window:
         event, values = login_window.Read()
         if event is None:
@@ -48,10 +50,11 @@ def login():
             password = hashlib.md5((values['password'] + 'salt').encode()).hexdigest()
             url = 'http://' + login_host + ':' + login_port + '/login'
             response = requests.post(url, auth=(values['user'], password))
+            username = values['user']
         except TypeError:
             msg = 'Bad Bad Inputs'
             return
-        except requests.exceptions.ConnectionError as e:
+        except requests.exceptions.ConnectionError:
             if USE_MOCK:
                 is_login = True
                 login_window.Close()
@@ -80,8 +83,35 @@ def counter_rst():
     counter = 0
 
 
-def sub_loop(file_list):
-    global msg
+def sub_loop(file_list, task_type):
+    global msg, is_login
+    url = 'http://' + task_host + ':' + task_port + '/file'
+    for index, each in enumerate(file_list):
+        total_size = os.path.getsize(each)
+        filename = each.split('/')[-1]
+        url = 'http://' + task_host + ':' + task_port + '/file'
+        headers = {"Authorization": "Bearer " + token}
+        payload = {
+            "filename": filename,
+            'owner': username,
+            'file_size': total_size,
+            'task_type': task_type
+        }
+        try:
+            response = requests.post(url, headers=headers, data=payload)
+        except requests.exceptions.ConnectionError:
+            if USE_MOCK:
+                pass
+            else:
+                msg = 'File Register Server Access Failure'
+                return
+        else:
+            content = json.loads(response.content.decode())
+            if content['code'] != 20000:
+                msg = 'Error: Identity Mismatched, Login Denied'
+                is_login = False
+                return
+
     for index, each in enumerate(file_list):
         total_size = os.path.getsize(each)
         filename = each.split('/')[-1]
@@ -99,6 +129,14 @@ def sub_loop(file_list):
                     if not t.isAlive():
                         break
             progress_window.Close()
+            payload = {
+                "filename": filename,
+                'status': 'finished'
+            }
+            try:
+                requests.put(url, data=payload)
+            except requests.exceptions.ConnectionError:
+                pass
     msg = str(len(file_list)) + ' file(s) have been uploaded.'
 
 
@@ -162,7 +200,7 @@ def main_loop():
                         continue
                 break
         main_window.Close()
-    sub_loop(file_list)
+    sub_loop(file_list, values['task'])
     return True
 
 
