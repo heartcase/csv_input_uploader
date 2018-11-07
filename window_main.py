@@ -9,7 +9,21 @@ import PySimpleGUI as sg
 def create_main_windows():
     # 初始化窗口
     window = sg.Window('CSV uploader', no_titlebar=True, grab_anywhere=True)
+    _window_show = window.Show
+
+    # 愚蠢的 丑陋的 设置默认窗口大小的方法
+    def _new_window_show(non_blocking=False):
+        for each in window.Rows[3:].copy():
+            if each[0].Key == 'PLACE_HOLDER':
+                window.Rows.remove(each)
+                break
+        if len(window.Rows) < 20:
+            place_holder = sg.Text('', key='PLACE_HOLDER', size=(0, 20 - len(window.Rows)))
+            window.Rows.append([place_holder])
+        _window_show(non_blocking)
+    window.Show = _new_window_show
     # Row 0: Menu
+    # 设置菜单布局
     menu_layout = [
         ['File', ['Config', 'Exit']]
     ]
@@ -18,12 +32,13 @@ def create_main_windows():
     files_selector = sg.FilesBrowse('添加文件', key='FILE', target=(None, None), size=(10, 1))
     _selector_callback = files_selector.ButtonCallBack
 
+    # 拦截按钮回调
     def _new_selector_callback():
-        print('called?')
         _selector_callback()
         files = files_selector.TKStringVar.get().split(';')
         for each in files:
-            add_task(each)
+            if each != '':
+                add_task(each)
         window.TKroot.quit()
 
     files_selector.ButtonCallBack = _new_selector_callback
@@ -32,29 +47,33 @@ def create_main_windows():
     # Row 3... Task Lists
 
     def add_task(filename):
+        # 跳过重复文件
+        if any(['REMOVE_' + filename == each[2].Key for each in window.Rows[3:] if len(each) > 2]):
+            return
+        # 创建删除文件按钮
         remove_button = sg.Button('删除任务', change_submits=True, size=(10, 1))
         remove_button.Key = 'REMOVE_' + filename
         _button_callback = remove_button.ButtonCallBack
 
+        # 重写按钮回调方法
         def _new_button_callback():
             _button_callback()
             for each in window.Rows[3:].copy():
                 if each[2].Key == remove_button.Key:
                     window.Rows.remove(each)
                     break
-
         remove_button.ButtonCallBack = _new_button_callback
+        # 添加新行
         window.Rows.append([
             sg.Text('上传 ' + filename.split('/')[-1], size=(20, 1)), sg.ProgressBar(100, size=(25, 1)), remove_button
         ])
-    # Row -1 Remove Button
-    # remove_button = sg.Button('删除任务', key='REMOVE', change_submits=True, size=(10, 1))
 
-    lay_out = [
+    # 设置布局
+    layout = [
         [menu],
         [tasks_msg, files_selector],
         []
     ]
-    window.Layout(lay_out)
+    window.Layout(layout)
     return window
 
