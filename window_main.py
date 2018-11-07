@@ -29,7 +29,7 @@ def create_main_windows():
     ]
     menu = sg.Menu(menu_layout)
     # Row 1: Post
-    files_selector = sg.FilesBrowse('添加文件', key='FILE', target=(None, None), size=(10, 1))
+    files_selector = sg.FilesBrowse('添加文件', key='ADD_FILES', target=(None, None), size=(12, 1))
     _selector_callback = files_selector.ButtonCallBack
 
     # 拦截按钮回调
@@ -39,6 +39,7 @@ def create_main_windows():
         for each in files:
             if each != '':
                 add_task(each)
+        window.LastButtonClicked = files_selector.Key
         window.TKroot.quit()
 
     files_selector.ButtonCallBack = _new_selector_callback
@@ -48,10 +49,10 @@ def create_main_windows():
 
     def add_task(filename):
         # 跳过重复文件
-        if any(['REMOVE_' + filename == each[2].Key for each in window.Rows[3:] if len(each) > 2]):
+        if any(['REMOVE_' + filename == each[3].Key for each in window.Rows[3:] if len(each) > 2]):
             return
         # 创建删除文件按钮
-        remove_button = sg.Button('删除任务', change_submits=True, size=(10, 1))
+        remove_button = sg.Button('删除', change_submits=True, size=(5, 1))
         remove_button.Key = 'REMOVE_' + filename
         _button_callback = remove_button.ButtonCallBack
 
@@ -59,13 +60,17 @@ def create_main_windows():
         def _new_button_callback():
             _button_callback()
             for each in window.Rows[3:].copy():
-                if each[2].Key == remove_button.Key:
+                if each[3].Key == remove_button.Key:
                     window.Rows.remove(each)
                     break
         remove_button.ButtonCallBack = _new_button_callback
+        # 开始/暂停/恢复按钮
+        start_pause_resume_button = sg.Button('开始', change_submits=False, size=(5, 1))
+        start_pause_resume_button.Key = 'START_' + filename
         # 添加新行
         window.Rows.append([
-            sg.Text('上传 ' + filename.split('/')[-1], size=(20, 1)), sg.ProgressBar(100, size=(25, 1)), remove_button
+            sg.Text('上传 ' + filename.split('/')[-1], size=(20, 1), background_color='#FFFFFF'
+                    ), sg.ProgressBar(100, size=(25, 1)), start_pause_resume_button, remove_button
         ])
 
     # 设置布局
