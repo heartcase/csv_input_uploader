@@ -38,7 +38,7 @@ password = ''
 # Json Web Token
 token = ''
 # 程序状态
-state = 'IDLE'
+state = 'MAIN'
 # 触发事件
 event = None
 # 状态值
@@ -48,15 +48,23 @@ values = None
 # region Window instances initialization
 main_window = create_main_windows()
 # endregion
-# Finite State Machine
-while 1:
-    event, values = main_window.Read()
-    if event[0:6] == 'REMOVE':
-        for each in main_window.Rows[3:].copy():
-            if each[2].Key == event:
-                main_window.Rows.remove(each)
-                break
+
+
+# region Finite State Machine
+def state_main():
+    global state
+    main_window.Read()
     main_window.Location = main_window.CurrentLocation()
     main_window.Close()
     main_window.Show(non_blocking=True)
+    state = 'MAIN'
 
+
+state_functions = {
+    'MAIN': state_main
+}
+
+# endregion
+
+while 1:
+    state_functions[state]()
