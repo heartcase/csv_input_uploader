@@ -30,27 +30,38 @@ task_host = task_server['host']
 task_port = task_server['port']
 
 username = ''
+password = ''
 
 BLOCK_SIZE = 8192
-USE_MOCK = True
+USE_MOCK = False
 
 counter = 0
 is_login = False
 token = ''
 msg = 'Greeting: Welcome, cowboy!'
 
+def request_login(input_username, input_password):
+    global is_login, token, msg, username, password
+    username = input_username
+    password = hashlib.md5((input_password + 'salt').encode()).hexdigest()
+    url = 'http://' + login_host + ':' + login_port + '/login'
+    response = requests.post(url, auth=(input_username, password))
+    content = json.loads(response.content.decode())
+    if content['code'] == 20000:
+        is_login = True
+        token = content['data']['token']
+    else:
+        msg = 'Error: Identity Mismatched, Login Denied'
+
 
 def login():
-    global is_login, token, msg, username
+    global is_login, token, msg, username, password
     with create_login_window(msg) as login_window:
         event, values = login_window.Read()
         if event is None:
             exit(0)
         try:
-            password = hashlib.md5((values['password'] + 'salt').encode()).hexdigest()
-            url = 'http://' + login_host + ':' + login_port + '/login'
-            response = requests.post(url, auth=(values['user'], password))
-            username = values['user']
+            request_login(values['user'],values['password'])
         except TypeError:
             msg = 'Bad Bad Inputs'
             return
@@ -63,13 +74,6 @@ def login():
                 msg = 'Error: Remote Server No Response, Access Failure.'
                 login_window.Close()
                 return
-        else:
-            content = json.loads(response.content.decode())
-            if content['code'] == 20000:
-                is_login = True
-                token = content['data']['token']
-            else:
-                msg = 'Error: Identity Mismatched, Login Denied'
         login_window.Close()
 
 
@@ -133,10 +137,30 @@ def sub_loop(file_list, task_type):
                 "filename": filename,
                 'status': 'finished'
             }
+            headers = {"Authorization": "Bearer " + token}
+
             try:
-                requests.put(url, data=payload)
+                response = requests.put(url, data=payload, headers=headers)
             except requests.exceptions.ConnectionError:
-                pass
+                if USE_MOCK:
+                    pass
+                else:
+                    msg = 'Connection Failed'
+            else:
+                content = json.loads(response.content.decode())
+                if content['code'] != 20000:
+                    try:
+                        request_login(username, password)
+                    except:
+                        is_login = False
+                    else:
+                        try:
+                            requests.put(url, data=payload, headers=headers)
+                        except:
+                            msg = 'Connection Failed'
+                else:
+                    return
+
     msg = str(len(file_list)) + ' file(s) have been uploaded.'
 
 
@@ -186,7 +210,7 @@ def main_loop():
                 main_window.FindElement('list').Update(values=file_list)
             except Exception as e:
                 print(e)
-                return False
+                return
             event, values = main_window.Read()
             if event is None:
                 exit(0)
@@ -201,7 +225,6 @@ def main_loop():
                 break
         main_window.Close()
     sub_loop(file_list, values['task'])
-    return True
 
 
 while 1:
