@@ -1,12 +1,18 @@
 # -*- coding:utf-8 -*-
 import PySimpleGUI as sg
+from configparser import ConfigParser, SectionProxy
+
+ftp_config_path = 'ftp_config.ini'
+config = ConfigParser()
+config.read(ftp_config_path)
+file_types = list(config['file_types'].values())
 
 
 def create_main_windows(msg):
     message_text = sg.Text(msg)
-    type_label = sg.Text('Task Type')
-    type_selector = sg.Combo(['Task_1', 'Task_2'], readonly=True, key='task')
-    type_checker = sg.Checkbox('Check Data Format', True, key='check')
+    type_label = sg.Text('File Type')
+    type_selector = sg.Combo(file_types, readonly=True, key='task')
+    type_checker = sg.Checkbox('Check Data Format', False, key='check', disabled=True)
     files_label = sg.Text('Select Input Files')
     files_selector = sg.FilesBrowse('Select Files', key='files', change_submits=True)
     files_selector.FileTypes = [("CSV Files", "*.csv")]
