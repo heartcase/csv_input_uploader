@@ -58,11 +58,13 @@ def state_main():
         main_window.Location = main_window.CurrentLocation()
         main_window.Close()
         main_window.Show(non_blocking=True)
-    state = 'MAIN'
+    elif event == '退出':
+        state = 'EXIT'
 
 
 state_functions = {
-    'MAIN': state_main
+    'MAIN': state_main,
+    'EXIT': exit
 }
 
 # endregion

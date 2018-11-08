@@ -8,7 +8,7 @@ import PySimpleGUI as sg
 
 def create_main_windows():
     # 初始化窗口
-    window = sg.Window('CSV uploader', no_titlebar=True, grab_anywhere=True)
+    window = sg.Window('CSV uploader')
     _window_show = window.Show
 
     # 愚蠢的 丑陋的 设置默认窗口大小的方法
@@ -25,11 +25,12 @@ def create_main_windows():
     # Row 0: Menu
     # 设置菜单布局
     menu_layout = [
-        ['File', ['Config', 'Exit']]
+        ['文件', ['配置', '---', '全部开始', '全部删除', '---', '退出']]
     ]
     menu = sg.Menu(menu_layout, background_color='#FFFFFF')
     # Row 1: Post
     files_selector = sg.FilesBrowse('添加文件', key='ADD_FILES', target=(None, None), size=(12, 1))
+    files_selector.FileTypes = [("CSV Files", "*.csv")]
     _selector_callback = files_selector.ButtonCallBack
 
     # 拦截按钮回调
@@ -38,14 +39,27 @@ def create_main_windows():
         _selector_callback()
         files = files_selector.TKStringVar.get().split(';')
         for each in files:
-            if each != '':
+            print(len(window.Rows) )
+            if each == '':
+                break
+            if len(window.Rows) < 10:
                 add_task(each)
+            else:
+                window.Hide()
+                sg.Popup('提示', '无法添加更多任务!', keep_on_top=True)
+                break
         window.LastButtonClicked = files_selector.Key
         window.TKroot.quit()
 
     files_selector.ButtonCallBack = _new_selector_callback
+    start_all_button = sg.Button('全部开始', change_submits=False, size=(10, 1), button_color=('#FFFFFF', '#66CC66'))
+    start_all_button.Key = 'START_ALL'
+
+    remove_all_button = sg.Button('全部删除', change_submits=False, size=(10, 1), button_color=('#FFFFFF', '#FF0000'))
+    remove_all_button.Key = 'REMOVE_ALL'
+
     # Row 2: Task List Label
-    tasks_msg = sg.Text('任务列表', size=(46, 1))
+    tasks_msg = sg.Text('任务列表', size=(35, 1))
     # Row 3... Task Lists
 
     def add_task(filename):
@@ -78,7 +92,7 @@ def create_main_windows():
     # 设置布局
     layout = [
         [menu],
-        [tasks_msg, files_selector],
+        [tasks_msg, start_all_button, remove_all_button, files_selector],
         []
     ]
     window.Layout(layout)
