@@ -54,10 +54,19 @@ main_window = create_main_windows()
 def state_main():
     global state, event, values
     event, values = main_window.Read()
-    if event == 'ADD_FILES' or event[0:6] == 'REMOVE':
+    print(event)
+    if not event:
+        state = 'EXIT'
+    elif event == 'ADD_FILES' or event[0:6] == 'REMOVE':
         main_window.Location = main_window.CurrentLocation()
         main_window.Close()
         main_window.Show(non_blocking=True)
+    elif event == '全部开始':
+        main_window.FindElement('START_ALL').ButtonCallBack()
+    elif event == '全部暂停':
+        main_window.FindElement('PAUSE_ALL').ButtonCallBack()
+    elif event == '全部删除':
+        main_window.FindElement('REMOVE_ALL').ButtonCallBack()
     elif event == '退出':
         state = 'EXIT'
 
