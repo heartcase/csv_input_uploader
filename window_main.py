@@ -3,11 +3,43 @@
 # 主窗口
 # By Heart Case
 #
+from read_config import CONFIG
+from ftplib import FTP
 from PySimpleGUI import Button, ProgressBar, Text, Popup, Window, Menu, FilesBrowse, Multiline
+from threading import Thread
+from ftp_connections import upload_file, upload_progress
 # Constants
 MIN_ROWS = 15
 REMOVE_BUTTON_COLUMN = 3
 START_BUTTON_COLUMN = 2
+# FTP服务器配置
+FTP_SERVER = CONFIG['ftp_server']
+# 客户端配置
+CLIENT = CONFIG['client']
+# FTP主机地址
+FTP_HOST = FTP_SERVER['host']
+# FTP 用户名
+FTP_USER = FTP_SERVER['user']
+# FTP 密码
+FTP_PASSWORD = FTP_SERVER['password']
+
+
+def create_ftp_thread(local_path, ftp_path, flag, bar, rest, remove_button):
+    ftp = FTP(FTP_HOST)
+    ftp.login(FTP_USER, FTP_PASSWORD)
+    return Thread(
+        target=upload_file,
+        args=(
+            local_path,
+            ftp_path,
+            ftp,
+            flag,
+            lambda x: upload_progress(local_path, ftp_path, ftp, bar, flag),
+            rest,
+            remove_button.ButtonCallBack
+        ),
+        daemon=True,
+    )
 
 
 def create_menu():
@@ -22,7 +54,7 @@ def create_menu():
 
 
 def create_remove_button(filename, window):
-    remove_button = Button('删除', change_submits=True, size=(5, 1), button_color=('#FFFFFF', '#FF0000'))
+    remove_button = Button('删除', change_submits=False, size=(5, 1), button_color=('#FFFFFF', '#FF0000'))
     remove_button.Key = 'REMOVE_' + filename
     _button_callback = remove_button.ButtonCallBack
 
@@ -31,8 +63,12 @@ def create_remove_button(filename, window):
         _button_callback()
         for each in window.Rows[3:].copy():
             if len(each) > REMOVE_BUTTON_COLUMN and each[REMOVE_BUTTON_COLUMN].Key == remove_button.Key:
+                if each[START_BUTTON_COLUMN].Key[:5] == 'PAUSE':
+                    each[START_BUTTON_COLUMN].ButtonCallBack()
                 window.Rows.remove(each)
                 break
+        window.LastButtonClicked = remove_button.Key
+        window.TKroot.quit()
 
     remove_button.ButtonCallBack = _new_button_callback
     return remove_button
@@ -43,11 +79,22 @@ def create_start_button(filename, window):
                              size=(5, 1), button_color=('#FFFFFF', '#66CC66'))
     start_button.Key = 'START_' + filename
     _button_callback = start_button.ButtonCallBack
+    flag = {'stop': True,
+            'started': False,
+            'done': False}
 
     # 重写按钮回调方法
     def _new_button_callback():
+        flag['stop'] = not flag['stop']
         _button_callback()
         if start_button.Key[0:5] == 'START':
+            remove_button = window.FindElement('REMOVE_' + filename)
+            bar = window.FindElement('PROGRESS_' + filename)
+            if flag['started']:
+                create_ftp_thread(filename, filename.split('/')[-1], flag, bar, True, remove_button).start()
+            else:
+                flag['started'] = True
+                create_ftp_thread(filename, filename.split('/')[-1], flag, bar, False, remove_button).start()
             start_button.Update(text='暂停', button_color=('#FFFFFF', '#AAAA88'))
             start_button.Key = 'PAUSE_' + start_button.Key[6:]
         else:
@@ -119,8 +166,7 @@ def create_start_all_button(window):
         _button_callback()
         for each in window.Rows[3:]:
             if len(each) > START_BUTTON_COLUMN and each[START_BUTTON_COLUMN].Key[0:5] == 'START':
-                each[START_BUTTON_COLUMN].Update(text='暂停', button_color=('#FFFFFF', '#AAAA88'))
-                each[START_BUTTON_COLUMN].Key = 'PAUSE_' + each[START_BUTTON_COLUMN].Key[6:]
+                each[START_BUTTON_COLUMN].ButtonCallBack()
         window.Refresh()
 
     start_all_button.ButtonCallBack = _new_button_callback
@@ -128,14 +174,19 @@ def create_start_all_button(window):
 
 
 def create_remove_all_button(window):
-    remove_all_button = Button('全部删除', change_submits=True, size=(10, 1), button_color=('#FFFFFF', '#FF0000'))
+    remove_all_button = Button('全部删除', change_submits=False, size=(10, 1), button_color=('#FFFFFF', '#FF0000'))
     remove_all_button.Key = 'REMOVE_ALL'
     _button_callback = remove_all_button.ButtonCallBack
 
     # 重写按钮回调方法
     def _new_button_callback():
         _button_callback()
+        for each in window.Rows[3:]:
+            if len(each) > REMOVE_BUTTON_COLUMN and each[START_BUTTON_COLUMN].Key[:5] == 'PAUSE':
+                each[START_BUTTON_COLUMN].ButtonCallBack()
         window.Rows = window.Rows[:3] + [window.Rows[-1]]
+        window.TKroot.quit()
+
     remove_all_button.ButtonCallBack = _new_button_callback
     return remove_all_button
 
@@ -150,8 +201,7 @@ def create_pause_all_button(window):
         _button_callback()
         for each in window.Rows[3:]:
             if len(each) > START_BUTTON_COLUMN and each[START_BUTTON_COLUMN].Key[0:5] == 'PAUSE':
-                each[START_BUTTON_COLUMN].Update(text='开始', button_color=('#FFFFFF', '#66CC66'))
-                each[START_BUTTON_COLUMN].Key = 'START_' + each[START_BUTTON_COLUMN].Key[6:]
+                each[START_BUTTON_COLUMN].ButtonCallBack()
         window.Refresh()
 
     pause_all_button.ButtonCallBack = _new_button_callback

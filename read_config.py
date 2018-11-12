@@ -5,6 +5,9 @@
 from configparser import ConfigParser
 import os
 
+# 配置文件路径
+CONFIG_PATH = 'config.ini'
+
 
 def read_config(config_path):
     """
@@ -32,3 +35,6 @@ def read_config(config_path):
         # 读取config 文件
         config.read(config_path)
     return config
+
+
+CONFIG = read_config(CONFIG_PATH)
